@@ -1,28 +1,17 @@
-#include <Windows.h>
-#include <TlHelp32.h>
-#include <iostream>
-#include "Core.h"
-#include "SonicChaosRemake.h"
+#include "Header.h"
 
-BOOL transfState = false;
-BOOL superState = false;
-
-DWORD transformAddress = 0x6F1C1;
-DWORD jumpAddress = 0x6E887;
-DWORD superAddress = 0x6CBDF;
-
-DWORD shieldStore = 0;
-
-DWORD transformJMPBack;
-DWORD superFormJMPBack;
-DWORD dropDashJMPBack;
-DWORD jumpJMPBack;
-DWORD go;
-BYTE frameTimer = 0;
+void bogusSDL_LTGRenderPresent(SDL_Renderer* x)
+{
+	if (lowTier)
+	{
+		SDL_RenderCopy(x, lowTier, NULL, &rect);
+	}
+	SDL_RenderPresent(x);
+}
 
 void __declspec(naked) SuperForm()
 {
-	if (superState)
+	if (superState && gameTimer->pause)
 	{
 		__asm
 		{
@@ -84,9 +73,51 @@ void __declspec(naked) SuperForm()
 			jmp [superFormJMPBack]
 		}
 	}
+	else if (transfState)
+	{
+		if (frameTimer > 59)
+		{
+			transfState = false;
+			superState = true;
+			*(double*)gravityAddress = 0.21875;
+			frameTimer = 0;
+		}
+		else
+		{
+			frameTimer++;
+		}
+
+		__asm {
+			mov cx, 25
+			jmp [superFormJMPBack]
+		}
+	}
+		
 	else
 	{
+		WORD saveCX = 0; //STACK, BITCH
+		__asm
+		{
+			mov saveCX, cx
+		}
+
+		frameTimer = 0;
+	/*	if (!lowTier)
+		{
+			render = SDL_GetRenderer(bogusWindow);
+
+			SDL_Surface* surf = SDL_LoadBMP("C:/rtdl_decompilation/LTG.bmp");
+			if (surf)
+			{
+				SDL_SetWindowTitle(bogusWindow, "YOU SHOULD KYS... NOW!");
+
+				lowTier = SDL_CreateTextureFromSurface(render, surf);
+				SDL_FreeSurface(surf);
+			}
+		}
+	*/
 		__asm {
+			mov cx, saveCX
 			jmp [superFormJMPBack]
 		}
 	}
@@ -103,28 +134,39 @@ void __declspec(naked) transform() //so check for super state, then check for tr
 		mov eax, [eax]
 		cmp eax, 50
 		jl exit_transform
+		mov eax, superState
+		cmp eax, 1
+		je exit_transform
 
 		mov eax, [shieldAddress]
 		mov eax, [eax]
 		mov shieldStore, eax
+
+		mov eax, 0x90000000
+		mov eax, [hurtTimer]
+
 		mov eax, 1
-		mov superState, eax
+		mov transfState, eax
+		jmp resetConstants
 
 		exit_transform:
 		mov eax, edx
 		jmp [transformJMPBack]
+
+		resetConstants:
+		mov eax, 0
+		mov ecx, accelerationConst
+		mov [ecx], eax
+		mov ecx, gravityAddress
+		mov [ecx+04], eax
+		mov ecx, dy
+		mov [ecx], eax
+		mov [ecx-04], eax
+		jmp exit_transform
 	}
 } 
 //hooks at drop dash start address, goes over to the sprite setting address and then replaces that instruction momentarily
 //alternatively you could modify the gateway by having it link to the very end of the jump/dropdash function after two hooks
-
-void __declspec(naked) dropDashTransformSprite()
-{
-	__asm {
-		mov cx, 25;
-		jmp [dropDashJMPBack]
-	}
-}
 
 void __declspec(naked) jump()
 {
@@ -132,7 +174,9 @@ void __declspec(naked) jump()
 	{
 		__asm {
 			mulss xmm0, SUPER_JUMP
-			jmp [go]
+			mov ecx, jumpJMPBack
+			add ecx, 5
+			jmp ecx
 		}
 	}
 	else
@@ -150,28 +194,30 @@ DWORD WINAPI MainThread(LPVOID param)
 	baseOffset(transformAddress);
 	baseOffset(jumpAddress);
 	baseOffset(superAddress);
-	
+	gameTimer = (sonicTimer*)(baseAddress + 0x196FCC);	
 	baseOffset(gravityAddress);
 	baseOffset(accelerationConst);
 	baseOffset(accelerationMax);
-
 	baseOffset(ring_counter);
 	baseOffset(shieldAddress);
 	baseOffset(hurtTimer);
+	baseOffset(dy);
 
-	int transformLength = 7, jumpLength = 5, superLength = 7;
-	jmpBackAddy = transformAddress + transformLength;
-	transformJMPBack = Hook((void*)transformAddress, transform, transformLength);
+	transformJMPBack = Hook((void*)transformAddress, transform, 7);
+	jumpJMPBack = Hook((void*)jumpAddress, jump, 5);
+	superFormJMPBack = Hook((void*)superAddress, SuperForm, 7);
 
-	jmpBackAddy = jumpAddress + jumpLength;
-	jumpJMPBack = Hook((void*)jumpAddress, jump, jumpLength);
-	go = jumpJMPBack + 5;
+	DWORD createWin = 0x9409F + baseAddress, x = 0, updateFrame = 0x94015 + baseAddress;
+/*	VirtualProtect((LPVOID)createWin, 6, PAGE_EXECUTE_READWRITE, &x);
+	VirtualProtect((LPVOID)updateFrame, 6, PAGE_EXECUTE_READWRITE, &x);
 
-	jmpBackAddy = superAddress + superLength;
-	superFormJMPBack = Hook((void*)superAddress, SuperForm, superLength);
+	DWORD* y = (DWORD*)&bogusSDL_CreateWin;
+	*(DWORD*)((BYTE*)createWin + 2) = (DWORD)&y; //that was a reference to a function, by the way
 
-
-	if (!(transformJMPBack && jumpJMPBack && superFormJMPBack))
+	DWORD* z = (DWORD*)&bogusSDL_LTGRenderPresent;
+	*(DWORD*)((BYTE*)updateFrame + 2) = (DWORD)&z;
+*/
+	if (!(transformJMPBack && jumpJMPBack && superFormJMPBack && VirtualProtect((LPVOID)gravityAddress, 8, PAGE_READWRITE, &x)))
 	{
 		FreeLibraryAndExitThread((HMODULE)param, 0);
 		return 0;

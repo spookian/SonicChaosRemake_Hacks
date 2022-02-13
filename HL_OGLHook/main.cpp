@@ -1,13 +1,20 @@
 #include <Windows.h>
-#include <TlHelp32.h>
-#include <iostream>
+#include <Core.h>
 #include "SonicChaosRemake.h"
-#include "Core.h"
 
 void updateXVelocity(HANDLE console, COORD oldPos, float* xPos, char* floater);
 void updateTimer(HANDLE console, COORD oldPos, sonicTimer* gameTimer);
 
 DWORD gateHook = 0;
+char cmdMsg[200] = "Injection complete!\nX Velocity: ";
+const char* spaceClear = "            ";
+
+void clearLine(HANDLE console, COORD oldPos)
+{
+	SetConsoleCursorPosition(console, oldPos);
+	WriteConsole(console, spaceClear, strlen(spaceClear), 0, 0);
+	SetConsoleCursorPosition(console, oldPos);
+}
 
 void __declspec(naked) ourFunct()
 {
@@ -31,7 +38,6 @@ DWORD WINAPI MainThread(LPVOID param)
 	int ringLength = 5;
 	DWORD ringAddress = 0x5B436;
 	baseOffset(ringAddress);
-	jmpBackAddy = ringAddress + ringLength;
 	gateHook = Hook((void*)ringAddress, ourFunct, ringLength);
 
 	if (!gateHook)

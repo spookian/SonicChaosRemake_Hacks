@@ -48,13 +48,13 @@ typedef struct {
 	float x;
 	float y;
 
-	float x_totalvelo; //read only
-	float y_totalvelo; //reads and writes
+	float total_hsp; //read only
+	float total_vsp; //reads and writes
 	
-	float x_airvelo; //read only
-	float y_airvelo; //read only
+	float air_hsp; //read only
+	float air_vsp; //read only
 
-	float x_groundvelo; //reads and writes
+	float ground_hsp; //reads and writes
 
 } playerStruct;
 
@@ -65,6 +65,6 @@ sonicTimer reserve_timer = { 0,0,0 };
 DWORD ring_counter = (DWORD)0x196F80;
 DWORD shieldAddress = (DWORD)0x19F984;
 DWORD hurtTimer = (DWORD)0x19F988;
-double* gravityAddress = (double*)0x97918;
+DWORD gravityAddress = (DWORD)0x97918;
 DWORD accelerationConst = 0x19F990;
 DWORD accelerationMax = 0x19F998;
